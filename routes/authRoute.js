@@ -12,12 +12,15 @@ const {
   verifyPassResetCode,
   resetPassword,
   verifyEmail,
+  protect,
+  isLogin,
 } = require("../services/authService");
 
 const router = express.Router();
 
 router.post("/signup", signupValidator, signup);
 router.post("/login", loginValidator, login);
+router.get("/checkLogin", protect, isLogin);
 router.post("/verifyEmail", verifyEmailValidator, verifyEmail);
 router.post("/forgotPassword", forgotPassword);
 router.post("/verifyResetCode", verifyPassResetCode);

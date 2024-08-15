@@ -42,9 +42,17 @@ exports.signup = asyncHandler(async (req, res, next) => {
       message,
     });
 
+    // 4- Create a JWT token
+    const token = createToken(user._id);
+
+    delete user._doc.password;
+
+    // 5- Send response with user data and token
     res.status(200).json({
       status: "Success",
-      message: "Verification code sent to email. Please check your inbox.",
+      message: "User created successfully. Please verify your email.",
+      data: user,
+      token,
     });
   } catch (err) {
     user.emailVerificationCode = undefined;
@@ -57,6 +65,43 @@ exports.signup = asyncHandler(async (req, res, next) => {
       )
     );
   }
+});
+
+// @desc    Login
+// @route   POST /api/v1/auth/login
+// @access  Public
+exports.login = asyncHandler(async (req, res, next) => {
+  const user = await User.findOne({ email: req.body.email }).select(
+    "+password"
+  );
+
+  if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
+    return next(new ApiError("Incorrect email or password", 401));
+  }
+
+  if (!user.emailVerified) {
+    return next(
+      new ApiError(
+        "Your email is not verified. Please verify your email to login.",
+        401
+      )
+    );
+  }
+
+  const token = createToken(user._id);
+
+  delete user._doc.password;
+
+  res.status(200).json({ data: user, token });
+});
+
+exports.isLogin = asyncHandler(async (req, res) => {
+  delete req.user._doc.password;
+  res.status(200).json({
+    status: "Success",
+    message: "User is logged in",
+    user: req.user,
+  });
 });
 
 // @desc    Verify Email using 6-digit code
@@ -97,37 +142,9 @@ exports.verifyEmail = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Login
-// @route   POST /api/v1/auth/login
-// @access  Public
-exports.login = asyncHandler(async (req, res, next) => {
-  const user = await User.findOne({ email: req.body.email }).select(
-    "+password"
-  );
-
-  if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
-    return next(new ApiError("Incorrect email or password", 401));
-  }
-
-  if (!user.emailVerified) {
-    return next(
-      new ApiError(
-        "Your email is not verified. Please verify your email to login.",
-        401
-      )
-    );
-  }
-
-  const token = createToken(user._id);
-
-  delete user._doc.password;
-
-  res.status(200).json({ data: user, token });
-});
-
 // @desc   make sure the user is logged in
 exports.protect = asyncHandler(async (req, res, next) => {
-  // 1) Check if token exist, if exist get
+  // 1) Check if token exists, if exists get it
   let token;
   if (
     req.headers.authorization &&
@@ -137,42 +154,45 @@ exports.protect = asyncHandler(async (req, res, next) => {
   }
   if (!token) {
     return next(
-      new ApiError(
-        "You are not login, Please login to get access this route",
-        401
-      )
+      new ApiError("You are not logged in. Please log in to get access.", 401)
     );
   }
 
-  // 2) Verify token (no change happens, expired token)
+  // 2) Verify token (if no change happens, expired token)
   const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
 
   // 3) Check if user exists
   const currentUser = await User.findById(decoded.userId);
   if (!currentUser) {
     return next(
-      new ApiError(
-        "The user that belong to this token does no longer exist",
-        401
-      )
+      new ApiError("The user belonging to this token no longer exists.", 401)
     );
   }
 
-  // 4) Check if user change his password after token created
+  // 4) Check if user has changed password after token was issued
   if (currentUser.passwordChangedAt) {
     const passChangedTimestamp = parseInt(
       currentUser.passwordChangedAt.getTime() / 1000,
       10
     );
-    // Password changed after token created (Error)
     if (passChangedTimestamp > decoded.iat) {
       return next(
         new ApiError(
-          "User recently changed his password. please login again..",
+          "User recently changed password. Please log in again.",
           401
         )
       );
     }
+  }
+
+  // 5) Check if email is verified
+  if (!currentUser.emailVerified) {
+    return next(
+      new ApiError(
+        "Your email is not verified. Please verify your email to access this route.",
+        403
+      )
+    );
   }
 
   req.user = currentUser;
