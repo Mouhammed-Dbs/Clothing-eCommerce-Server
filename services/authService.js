@@ -1,17 +1,14 @@
 const crypto = require("crypto");
-
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-
 const asyncHandler = require("express-async-handler");
 const ApiError = require("../utils/apiError");
 const sendEmail = require("../utils/sendEmail");
 const createToken = require("../utils/createToken");
-
 const User = require("../models/userModel");
 
 // @desc    Signup
-// @route   GET /api/v1/auth/signup
+// @route   POST /api/v1/auth/signup
 // @access  Public
 exports.signup = asyncHandler(async (req, res, next) => {
   // 1- Create user
@@ -21,32 +18,110 @@ exports.signup = asyncHandler(async (req, res, next) => {
     password: req.body.password,
   });
 
-  // 2- Generate token
-  const token = createToken(user._id);
+  // 2- Generate 6-digit email verification code
+  const verificationCode = Math.floor(
+    100000 + Math.random() * 900000
+  ).toString();
 
-  // 3- Delete password from response
-  delete user._doc.password;
+  // Hash the verification code before saving to the database
+  user.emailVerificationCode = crypto
+    .createHash("sha256")
+    .update(verificationCode)
+    .digest("hex");
+  user.emailVerificationExpires = Date.now() + 10 * 60 * 1000; // 10 minutes expiration
 
-  res.status(201).json({ data: user, token });
+  await user.save({ validateBeforeSave: false });
+
+  // 3- Send verification code via email
+  const message = `Hello ${user.name},\n\nYour email verification code is ${verificationCode}.\n\nThis code will expire in 10 minutes.\n\nIf you did not request this, please ignore this email.`;
+
+  try {
+    await sendEmail({
+      email: user.email,
+      subject: "Email Verification Code",
+      message,
+    });
+
+    res.status(200).json({
+      status: "Success",
+      message: "Verification code sent to email. Please check your inbox.",
+    });
+  } catch (err) {
+    user.emailVerificationCode = undefined;
+    user.emailVerificationExpires = undefined;
+    await user.save({ validateBeforeSave: false });
+    return next(
+      new ApiError(
+        "There was an error sending the email. Try again later!",
+        500
+      )
+    );
+  }
+});
+
+// @desc    Verify Email using 6-digit code
+// @route   POST /api/v1/auth/verifyEmail
+// @access  Public
+exports.verifyEmail = asyncHandler(async (req, res, next) => {
+  // 1) Get the user by email and check the provided code
+  const user = await User.findOne({ email: req.body.email });
+
+  if (!user) {
+    return next(new ApiError("User not found", 404));
+  }
+
+  const hashedCode = crypto
+    .createHash("sha256")
+    .update(req.body.code)
+    .digest("hex");
+
+  if (
+    user.emailVerificationCode !== hashedCode ||
+    user.emailVerificationExpires < Date.now()
+  ) {
+    return next(
+      new ApiError("Verification code is invalid or has expired", 400)
+    );
+  }
+
+  // 2) If code is valid, mark email as verified
+  user.emailVerified = true;
+  user.emailVerificationCode = undefined;
+  user.emailVerificationExpires = undefined;
+  await user.save();
+
+  // 3) Send a success response
+  res.status(200).json({
+    status: "Success",
+    message: "Email verified successfully",
+  });
 });
 
 // @desc    Login
-// @route   GET /api/v1/auth/login
+// @route   POST /api/v1/auth/login
 // @access  Public
 exports.login = asyncHandler(async (req, res, next) => {
-  // 1) check if password and email in the body (validation)
-  // 2) check if user exist & check if password is correct
-  const user = await User.findOne({ email: req.body.email });
+  const user = await User.findOne({ email: req.body.email }).select(
+    "+password"
+  );
 
   if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
     return next(new ApiError("Incorrect email or password", 401));
   }
-  // 3) generate token
+
+  if (!user.emailVerified) {
+    return next(
+      new ApiError(
+        "Your email is not verified. Please verify your email to login.",
+        401
+      )
+    );
+  }
+
   const token = createToken(user._id);
 
-  // Delete password from response
   delete user._doc.password;
-  // 4) send response to client side
+
   res.status(200).json({ data: user, token });
 });
 
