@@ -316,3 +316,41 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
   const token = createToken(user._id);
   res.status(200).json({ token });
 });
+
+// @desc    Admin/Manager Dashboard Login
+// @route   POST /api/v1/auth/dashboard-login
+// @access  Public
+exports.dashboardLogin = asyncHandler(async (req, res, next) => {
+  const user = await User.findOne({ email: req.body.email }).select(
+    "+password"
+  );
+
+  if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
+    return next(new ApiError("Incorrect email or password", 401));
+  }
+
+  if (!user.emailVerified) {
+    return next(
+      new ApiError(
+        "Your email is not verified. Please verify your email to login.",
+        401
+      )
+    );
+  }
+
+  // Check if the user role is admin or manager
+  if (user.role !== "admin" && user.role !== "manager") {
+    return next(
+      new ApiError(
+        "Access denied. You are not allowed to access the dashboard.",
+        403
+      )
+    );
+  }
+
+  const token = createToken(user._id);
+
+  delete user._doc.password;
+
+  res.status(200).json({ data: user, token });
+});
