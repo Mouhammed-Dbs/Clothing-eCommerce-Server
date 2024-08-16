@@ -108,13 +108,19 @@ exports.isLogin = asyncHandler(async (req, res) => {
 // @route   POST /api/v1/auth/verifyEmail
 // @access  Public
 exports.verifyEmail = asyncHandler(async (req, res, next) => {
-  // 1) Get the user by email and check the provided code
+  // 1) Get the user by email
   const user = await User.findOne({ email: req.body.email });
 
   if (!user) {
     return next(new ApiError("User not found", 404));
   }
 
+  // Check if the email is already verified
+  if (user.emailVerified) {
+    return next(new ApiError("Email is already verified.", 400));
+  }
+
+  // 2) Check the provided code
   const hashedCode = crypto
     .createHash("sha256")
     .update(req.body.code)
@@ -129,13 +135,13 @@ exports.verifyEmail = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // 2) If code is valid, mark email as verified
+  // 3) If code is valid, mark email as verified
   user.emailVerified = true;
   user.emailVerificationCode = undefined;
   user.emailVerificationExpires = undefined;
   await user.save();
 
-  // 3) Send a success response
+  // 4) Send a success response
   res.status(200).json({
     status: "Success",
     message: "Email verified successfully",
@@ -151,6 +157,11 @@ exports.resendVerificationCode = asyncHandler(async (req, res, next) => {
 
   if (!user) {
     return next(new ApiError("User not found", 404));
+  }
+
+  // Check if the email is already verified
+  if (user.emailVerified) {
+    return next(new ApiError("Email is already verified.", 400));
   }
 
   // 2) Check if the current verification code has expired
