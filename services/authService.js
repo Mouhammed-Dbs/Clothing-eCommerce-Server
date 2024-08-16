@@ -142,6 +142,65 @@ exports.verifyEmail = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Resend Email Verification Code
+// @route   POST /api/v1/auth/resendVerificationCode
+// @access  Public
+exports.resendVerificationCode = asyncHandler(async (req, res, next) => {
+  // 1) Get the user by email
+  const user = await User.findOne({ email: req.body.email });
+
+  if (!user) {
+    return next(new ApiError("User not found", 404));
+  }
+
+  // 2) Check if the current verification code has expired
+  if (user.emailVerificationExpires > Date.now()) {
+    return next(
+      new ApiError("The current verification code is still valid", 400)
+    );
+  }
+
+  // 3) Generate a new 6-digit email verification code
+  const verificationCode = Math.floor(
+    100000 + Math.random() * 900000
+  ).toString();
+
+  // Hash the new verification code before saving to the database
+  user.emailVerificationCode = crypto
+    .createHash("sha256")
+    .update(verificationCode)
+    .digest("hex");
+  user.emailVerificationExpires = Date.now() + 10 * 60 * 1000; // 10 minutes expiration
+
+  await user.save({ validateBeforeSave: false });
+
+  // 4) Send the new verification code via email
+  const message = `Hello ${user.name},\n\nYour new email verification code is ${verificationCode}.\n\nThis code will expire in 10 minutes.\n\nIf you did not request this, please ignore this email.`;
+
+  try {
+    await sendEmail({
+      email: user.email,
+      subject: "New Email Verification Code",
+      message,
+    });
+
+    res.status(200).json({
+      status: "Success",
+      message: "New verification code sent to email.",
+    });
+  } catch (err) {
+    user.emailVerificationCode = undefined;
+    user.emailVerificationExpires = undefined;
+    await user.save({ validateBeforeSave: false });
+    return next(
+      new ApiError(
+        "There was an error sending the email. Try again later!",
+        500
+      )
+    );
+  }
+});
+
 // @desc   make sure the user is logged in
 exports.protect = asyncHandler(async (req, res, next) => {
   // 1) Check if token exists, if exists get it
