@@ -15,7 +15,7 @@ const sendEmail = async (options) => {
 
   // 2) Define email options (like from, to, subject, email content)
   const mailOpts = {
-    from: "E-shop App <info@saramoda.shop>",
+    from: "Saramoda App <info@saramoda.shop>",
     to: options.email,
     subject: options.subject,
     text: options.message,
