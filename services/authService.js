@@ -35,11 +35,24 @@ exports.signup = asyncHandler(async (req, res, next) => {
   // 3- Send verification code via email
   const message = `Hello ${user.name},\n\nYour email verification code is ${verificationCode}.\n\nThis code will expire in 10 minutes.\n\nIf you did not request this, please ignore this email.`;
 
+  const htmlMessage = `
+  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background-color: #f9f9f9;">
+    <h2 style="color: #333; text-align: center;">Welcome to Saramoda, ${user.name}!</h2>
+    <p style="color: #666; font-size: 16px;">Thank you for signing up. Please verify your email address by using the following code:</p>
+    <div style="text-align: center; margin: 20px 0;">
+      <span style="display: inline-block; background-color: #ff5a5f; color: #fff; padding: 10px 20px; border-radius: 5px; font-size: 20px; letter-spacing: 2px;">${verificationCode}</span>
+    </div>
+    <p style="color: #666; font-size: 16px;">This code will expire in 10 minutes. If you did not request this, please ignore this email.</p>
+    <p style="color: #666; font-size: 16px;">Thank you,<br>The Saramoda Team</p>
+  </div>
+`;
+
   try {
     await sendEmail({
       email: user.email,
       subject: "Email Verification Code",
       message,
+      htmlMessage,
     });
 
     // 4- Create a JWT token
@@ -188,11 +201,25 @@ exports.resendVerificationCode = asyncHandler(async (req, res, next) => {
   // 4) Send the new verification code via email
   const message = `Hello ${user.name},\n\nYour new email verification code is ${verificationCode}.\n\nThis code will expire in 10 minutes.\n\nIf you did not request this, please ignore this email.`;
 
+  const htmlMessage = `
+  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background-color: #f9f9f9;">
+    <h2 style="color: #333; text-align: center;">New Verification Code</h2>
+    <p style="color: #666; font-size: 16px;">Hello ${user.name},</p>
+    <p style="color: #666; font-size: 16px;">Here is your new verification code:</p>
+    <div style="text-align: center; margin: 20px 0;">
+      <span style="display: inline-block; background-color: #ff5a5f; color: #fff; padding: 10px 20px; border-radius: 5px; font-size: 20px; letter-spacing: 2px;">${verificationCode}</span>
+    </div>
+    <p style="color: #666; font-size: 16px;">This code will expire in 10 minutes. If you did not request this, please ignore this email.</p>
+    <p style="color: #666; font-size: 16px;">Best regards,<br>The Saramoda Team</p>
+  </div>
+`;
+
   try {
     await sendEmail({
       email: user.email,
       subject: "New Email Verification Code",
       message,
+      htmlMessage,
     });
 
     res.status(200).json({
@@ -325,17 +352,31 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
   // 4) Send the reset code via email
   const message = `Hi ${user.name},\n We received a request to reset the password on your E-shop Account. \n ${resetCode} \n Enter this code to complete the reset. \n Thanks for helping us keep your account secure.\n The E-shop Team`;
 
+  const htmlMessage = `
+  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background-color: #f9f9f9;">
+    <h2 style="color: #333; text-align: center;">Password Reset Request</h2>
+    <p style="color: #666; font-size: 16px;">Hi ${user.name},</p>
+    <p style="color: #666; font-size: 16px;">We received a request to reset your password. Use the following code to reset your password:</p>
+    <div style="text-align: center; margin: 20px 0;">
+      <span style="display: inline-block; background-color: #ff5a5f; color: #fff; padding: 10px 20px; border-radius: 5px; font-size: 20px; letter-spacing: 2px;">${resetCode}</span>
+    </div>
+    <p style="color: #666; font-size: 16px;">If you did not request this, please ignore this email.</p>
+    <p style="color: #666; font-size: 16px;">Thanks for helping us keep your account secure.</p>
+    <p style="color: #666; font-size: 16px;">Best regards,<br>The Saramoda Team</p>
+  </div>
+`;
+
   try {
     await sendEmail({
       email: user.email,
       subject: "Your password reset code (valid for 10 min)",
       message,
+      htmlMessage,
     });
   } catch (err) {
     user.passwordResetCode = undefined;
     user.passwordResetExpires = undefined;
     user.passwordResetVerified = undefined;
-    console.log(err);
     await user.save();
     return next(new ApiError("There is an error in sending email", 500));
   }
@@ -389,6 +430,7 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
     return next(new ApiError("Reset code not verified", 400));
   }
 
+  // 3) Update user's password and reset related fields
   user.password = req.body.newPassword;
   user.passwordResetCode = undefined;
   user.passwordResetExpires = undefined;
@@ -396,9 +438,59 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
 
   await user.save();
 
-  // 3) if everything is ok, generate token
+  // 4) Generate JWT token
   const token = createToken(user._id);
-  res.status(200).json({ token });
+
+  // 5) Prepare email content
+  const subject = "Your Password Has Been Reset Successfully";
+
+  const htmlMessage = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background-color: #ffffff;">
+      <h2 style="color: #d23669; text-align: center;">Password Reset Successful</h2>
+      <p style="color: #333333; font-size: 16px;">Hi ${user.name},</p>
+      <p style="color: #333333; font-size: 16px;">Your password has been successfully reset. You can now log in with your new password.</p>
+      <p style="color: #333333; font-size: 16px;">If you did not request this change, please contact our support team immediately.</p>
+      <p style="color: #333333; font-size: 16px;">Best regards,<br>The Saramoda Team</p>
+    </div>
+  `;
+
+  const textMessage = `
+    Hi ${user.name},
+
+    Your password has been successfully reset. You can now log in with your new password.
+
+    If you did not request this change, please contact our support team immediately.
+
+    Best regards,
+    The Saramoda Team
+  `;
+
+  // 6) Send confirmation email
+  try {
+    await sendEmail({
+      email: user.email,
+      subject,
+      message: textMessage,
+      htmlMessage,
+    });
+
+    // 7) Send success response
+    res.status(200).json({
+      status: "Success",
+      message: "Password has been reset successfully",
+      token,
+    });
+  } catch (err) {
+    console.error(`Error sending email: ${err.message}`);
+
+    // Even if email fails, we can still send a success response
+    res.status(200).json({
+      status: "Success",
+      message:
+        "Password has been reset successfully, but we couldn't send the confirmation email.",
+      token,
+    });
+  }
 });
 
 // @desc    Admin/Manager Dashboard Login
