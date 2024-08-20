@@ -294,7 +294,20 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
       new ApiError(`There is no user with that email ${req.body.email}`, 404)
     );
   }
-  // 2) If user exist, Generate hash reset random 6 digits and save it in db
+
+  // 2) Check if a reset code already exists and is still valid
+  if (
+    user.passwordResetCode &&
+    user.passwordResetExpires > Date.now() &&
+    !user.passwordResetVerified
+  ) {
+    return res.status(200).json({
+      status: "Success",
+      message: "A reset code has already been sent. Please check your email.",
+    });
+  }
+
+  // 3) If no valid reset code exists, generate a new one
   const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
   const hashedResetCode = crypto
     .createHash("sha256")
@@ -309,8 +322,9 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
 
   await user.save();
 
-  // 3) Send the reset code via email
+  // 4) Send the reset code via email
   const message = `Hi ${user.name},\n We received a request to reset the password on your E-shop Account. \n ${resetCode} \n Enter this code to complete the reset. \n Thanks for helping us keep your account secure.\n The E-shop Team`;
+
   try {
     await sendEmail({
       email: user.email,
