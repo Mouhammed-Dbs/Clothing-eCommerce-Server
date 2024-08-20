@@ -350,7 +350,7 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
   await user.save();
 
   // 4) Send the reset code via email
-  const message = `Hi ${user.name},\n We received a request to reset the password on your E-shop Account. \n ${resetCode} \n Enter this code to complete the reset. \n Thanks for helping us keep your account secure.\n The E-shop Team`;
+  const message = `Hi ${user.name},\n We received a request to reset the password on your Saramoda Account. \n ${resetCode} \n Enter this code to complete the reset. \n Thanks for helping us keep your account secure.\n The Saramoda Team`;
 
   const htmlMessage = `
   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background-color: #f9f9f9;">
