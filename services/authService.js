@@ -321,7 +321,7 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
     user.passwordResetCode = undefined;
     user.passwordResetExpires = undefined;
     user.passwordResetVerified = undefined;
-
+    console.log(err);
     await user.save();
     return next(new ApiError("There is an error in sending email", 500));
   }
