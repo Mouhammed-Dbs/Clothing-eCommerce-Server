@@ -68,9 +68,9 @@ const productSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    size: { 
-        type: [String], 
-        default: ['small', 'medium', 'large'] // Default values for the array
+    size: {
+      type: [String],
+      default: ["small", "medium", "large"], // Default values for the array
     },
   },
   {
@@ -90,9 +90,13 @@ productSchema.virtual("reviews", {
 // Mongoose query middleware
 productSchema.pre(/^find/, function (next) {
   this.populate({
+    path: "subcategories",
+    select: "name _id",
+  }).populate({
     path: "category",
-    select: "name -_id",
+    select: "name -_id", // name without _id
   });
+
   next();
 });
 
