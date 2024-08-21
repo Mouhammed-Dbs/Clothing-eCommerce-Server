@@ -19,7 +19,10 @@ class ApiFeatures {
       queryStringObj.subcategories = { $in: subcategories };
     }
 
-    this.mongooseQuery = this.mongooseQuery.find(JSON.parse(queryStr));
+    const query = JSON.parse(queryStr);
+    query.subcategories = queryStringObj.subcategories;
+
+    this.mongooseQuery = this.mongooseQuery.find(query);
 
     return this;
   }
