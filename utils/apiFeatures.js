@@ -13,14 +13,14 @@ class ApiFeatures {
     let queryStr = JSON.stringify(queryStringObj);
     queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
 
+    const query = JSON.parse(queryStr);
+
     // Handle subcategory filtering
     if (queryStringObj.subcategories) {
       const subcategories = queryStringObj.subcategories.split(",");
       queryStringObj.subcategories = { $in: subcategories };
+      query.subcategories = queryStringObj.subcategories;
     }
-
-    const query = JSON.parse(queryStr);
-    query.subcategories = queryStringObj.subcategories;
 
     this.mongooseQuery = this.mongooseQuery.find(query);
 
