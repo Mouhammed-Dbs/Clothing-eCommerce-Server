@@ -68,7 +68,7 @@ const productSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    size: {
+    sizes: {
       type: [String],
       default: ["small", "medium", "large"], // Default values for the array
     },
