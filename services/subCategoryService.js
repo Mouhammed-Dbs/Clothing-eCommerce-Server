@@ -16,6 +16,40 @@ exports.createFilterObj = (req, res, next) => {
   next();
 };
 
+exports.getSubCategoriesWithProductCount = async (req, res, next) => {
+  try {
+    const subCategoriesWithCounts = await SubCategory.aggregate([
+      {
+        $lookup: {
+          from: "products",
+          localField: "_id",
+          foreignField: "subcategories",
+          as: "products",
+        },
+      },
+      {
+        $project: {
+          name: 1,
+          slug: 1,
+          category: 1,
+          productCount: { $size: "$products" },
+        },
+      },
+    ]);
+
+    res.status(200).json({
+      status: "success",
+      results: subCategoriesWithCounts.length,
+      data: subCategoriesWithCounts,
+    });
+  } catch (error) {
+    res.status(400).json({
+      status: "fail",
+      message: error.message,
+    });
+  }
+};
+
 // @desc    Get list of subcategories
 // @route   GET /api/v1/subcategories
 // @access  Public
