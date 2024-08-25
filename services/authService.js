@@ -91,16 +91,6 @@ exports.login = asyncHandler(async (req, res, next) => {
   if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
     return next(new ApiError("Incorrect email or password", 401));
   }
-
-  if (!user.emailVerified) {
-    return next(
-      new ApiError(
-        "Your email is not verified. Please verify your email to login.",
-        401
-      )
-    );
-  }
-
   const token = createToken(user._id);
 
   delete user._doc.password;
