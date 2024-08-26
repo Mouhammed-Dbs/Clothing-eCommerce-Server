@@ -22,7 +22,7 @@ const router = express.Router();
 
 router.post("/signup", signupValidator, signup);
 router.post("/login", loginValidator, login);
-router.get("/checkLogin", isLogin);
+router.get("/checkLogin", protect, isLogin);
 router.post("/verifyEmail", verifyEmailValidator, verifyEmail);
 router.post("/resendVerificationCode", resendVerificationCode);
 router.post("/forgotPassword", forgotPassword);

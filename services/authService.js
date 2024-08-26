@@ -273,14 +273,14 @@ exports.protect = asyncHandler(async (req, res, next) => {
   }
 
   // 5) Check if email is verified
-  if (!currentUser.emailVerified) {
-    return next(
-      new ApiError(
-        "Your email is not verified. Please verify your email to access this route.",
-        403
-      )
-    );
-  }
+  // if (!currentUser.emailVerified) {
+  //   return next(
+  //     new ApiError(
+  //       "Your email is not verified. Please verify your email to access this route.",
+  //       403
+  //     )
+  //   );
+  // }
 
   req.user = currentUser;
   next();
