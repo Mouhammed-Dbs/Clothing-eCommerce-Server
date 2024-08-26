@@ -95,7 +95,7 @@ exports.login = asyncHandler(async (req, res, next) => {
 
   delete user._doc.password;
 
-  res.status(200).json({ data: user, token });
+  res.status(200).json({ user: user, token });
 });
 
 exports.isLogin = asyncHandler(async (req, res) => {
