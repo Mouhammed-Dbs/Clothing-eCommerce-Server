@@ -64,7 +64,7 @@ exports.signup = asyncHandler(async (req, res, next) => {
     res.status(200).json({
       status: "Success",
       message: "User created successfully. Please verify your email.",
-      data: user,
+      user: user,
       token,
     });
   } catch (err) {
