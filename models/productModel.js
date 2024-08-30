@@ -62,7 +62,6 @@ const productSchema = new mongoose.Schema(
       type: Number,
       min: [1, "Rating must be above or equal 1.0"],
       max: [5, "Rating must be below or equal 5.0"],
-      // set: (val) => Math.round(val * 10) / 10, // 3.3333 * 10 => 33.333 => 33 => 3.3
     },
     ratingsQuantity: {
       type: Number,
@@ -75,7 +74,6 @@ const productSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    // to enable virtual populate
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   }
@@ -101,7 +99,7 @@ productSchema.pre(/^find/, function (next) {
 });
 
 const setImageURL = (doc) => {
-  if (doc.imageCover) {
+  if (doc.imageCover && !doc.imageCover.startsWith(process.env.BASE_URL)) {
     const imageUrl = `${process.env.BASE_URL}/products/${doc.imageCover}`;
     doc.imageCover = imageUrl;
   }
@@ -114,6 +112,25 @@ const setImageURL = (doc) => {
     doc.images = imagesList;
   }
 };
+
+// Remove base URL
+const removeBaseURLFromImages = (doc) => {
+  if (doc.imageCover && doc.imageCover.startsWith(process.env.BASE_URL)) {
+    doc.imageCover = doc.imageCover.replace(
+      `${process.env.BASE_URL}/products/`,
+      ""
+    );
+  }
+
+  if (doc.images) {
+    doc.images = doc.images.map((image) =>
+      image.startsWith(process.env.BASE_URL)
+        ? image.replace(`${process.env.BASE_URL}/products/`, "")
+        : image
+    );
+  }
+};
+
 // findOne, findAll and update
 productSchema.post("init", (doc) => {
   setImageURL(doc);
@@ -122,6 +139,12 @@ productSchema.post("init", (doc) => {
 // create
 productSchema.post("save", (doc) => {
   setImageURL(doc);
+});
+
+// Pre-save middleware using the separate function
+productSchema.pre("save", function (next) {
+  removeBaseURLFromImages(this);
+  next();
 });
 
 module.exports = mongoose.model("Product", productSchema);
