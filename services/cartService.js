@@ -1,9 +1,9 @@
-const asyncHandler = require('express-async-handler');
-const ApiError = require('../utils/apiError');
+const asyncHandler = require("express-async-handler");
+const ApiError = require("../utils/apiError");
 
-const Product = require('../models/productModel');
-const Coupon = require('../models/couponModel');
-const Cart = require('../models/cartModel');
+const Product = require("../models/productModel");
+const Coupon = require("../models/couponModel");
+const Cart = require("../models/cartModel");
 
 const calcTotalCartPrice = (cart) => {
   let totalPrice = 0;
@@ -15,46 +15,60 @@ const calcTotalCartPrice = (cart) => {
   return totalPrice;
 };
 
-// @desc    Add product to  cart
+// @desc    Add product to cart
 // @route   POST /api/v1/cart
 // @access  Private/User
 exports.addProductToCart = asyncHandler(async (req, res, next) => {
-  const { productId, color } = req.body;
+  const { productId, color, size } = req.body;
   const product = await Product.findById(productId);
+  // Check if product is available
+  if (product.quantity < 1) {
+    return next(new ApiError(`Product is out of stock`, 400));
+  }
 
   // 1) Get Cart for logged user
   let cart = await Cart.findOne({ user: req.user._id });
 
   if (!cart) {
-    // create cart fot logged user with product
+    // create cart for logged user with product
     cart = await Cart.create({
       user: req.user._id,
-      cartItems: [{ product: productId, color, price: product.price }],
+      cartItems: [{ product: productId, color, size, price: product.price }],
     });
   } else {
-    // product exist in cart, update product quantity
+    // product exists in cart, update product quantity
     const productIndex = cart.cartItems.findIndex(
-      (item) => item.product.toString() === productId && item.color === color
+      (item) =>
+        item.product._id.toString() === productId &&
+        item.color === color &&
+        item.size === size
     );
 
     if (productIndex > -1) {
       const cartItem = cart.cartItems[productIndex];
       cartItem.quantity += 1;
-
       cart.cartItems[productIndex] = cartItem;
     } else {
-      // product not exist in cart,  push product to cartItems array
-      cart.cartItems.push({ product: productId, color, price: product.price });
+      // product not exist in cart, push product to cartItems array
+      cart.cartItems.push({
+        product: productId,
+        color,
+        size,
+        price: product.price,
+      });
     }
   }
 
+  // Decrement the product quantity
+  product.quantity -= 1;
+  await product.save();
   // Calculate total cart price
   calcTotalCartPrice(cart);
   await cart.save();
 
   res.status(200).json({
-    status: 'success',
-    message: 'Product added to cart successfully',
+    status: "success",
+    message: "Product added to cart successfully",
     numOfCartItems: cart.cartItems.length,
     data: cart,
   });
@@ -73,7 +87,7 @@ exports.getLoggedUserCart = asyncHandler(async (req, res, next) => {
   }
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     numOfCartItems: cart.cartItems.length,
     data: cart,
   });
@@ -83,29 +97,68 @@ exports.getLoggedUserCart = asyncHandler(async (req, res, next) => {
 // @route   DELETE /api/v1/cart/:itemId
 // @access  Private/User
 exports.removeSpecificCartItem = asyncHandler(async (req, res, next) => {
-  const cart = await Cart.findOneAndUpdate(
-    { user: req.user._id },
-    {
-      $pull: { cartItems: { _id: req.params.itemId } },
-    },
-    { new: true }
+  const cart = await Cart.findOne({ user: req.user._id });
+
+  if (!cart) {
+    return next(
+      new ApiError(`There is no cart for this user id : ${req.user._id}`, 404)
+    );
+  }
+
+  const itemIndex = cart.cartItems.findIndex(
+    (item) => item._id.toString() === req.params.itemId
   );
 
-  calcTotalCartPrice(cart);
-  cart.save();
+  if (itemIndex > -1) {
+    const cartItem = cart.cartItems[itemIndex];
+    const product = await Product.findById(cartItem.product._id.toString());
 
-  res.status(200).json({
-    status: 'success',
-    numOfCartItems: cart.cartItems.length,
-    data: cart,
-  });
+    // Return the quantity back to stock
+    product.quantity += cartItem.quantity;
+    await product.save();
+
+    // Remove item from cart
+    cart.cartItems.splice(itemIndex, 1);
+
+    calcTotalCartPrice(cart);
+    await cart.save();
+
+    res.status(200).json({
+      status: "success",
+      numOfCartItems: cart.cartItems.length,
+      data: cart,
+    });
+  } else {
+    return next(
+      new ApiError(`There is no item for this id :${req.params.itemId}`, 404)
+    );
+  }
 });
 
 // @desc    clear logged user cart
 // @route   DELETE /api/v1/cart
 // @access  Private/User
 exports.clearCart = asyncHandler(async (req, res, next) => {
+  const cart = await Cart.findOne({ user: req.user._id });
+
+  if (!cart) {
+    return next(new ApiError(`There is no cart for user ${req.user._id}`, 404));
+  }
+
+  // Return all quantities to stock using Promise.all for parallel execution
+  await Promise.all(
+    cart.cartItems.map(async (item) => {
+      const product = await Product.findById(item.product._id.toString());
+      if (product) {
+        product.quantity += item.quantity;
+        await product.save();
+      }
+    })
+  );
+
+  // Delete the user's cart
   await Cart.findOneAndDelete({ user: req.user._id });
+
   res.status(204).send();
 });
 
@@ -123,8 +176,27 @@ exports.updateCartItemQuantity = asyncHandler(async (req, res, next) => {
   const itemIndex = cart.cartItems.findIndex(
     (item) => item._id.toString() === req.params.itemId
   );
+
   if (itemIndex > -1) {
     const cartItem = cart.cartItems[itemIndex];
+    const productId = cartItem.product._id.toString();
+    const product = await Product.findById(productId);
+
+    if (!product) {
+      return next(new ApiError(`Product not found`, 404));
+    }
+
+    const quantityDifference = quantity - cartItem.quantity;
+
+    if (quantityDifference > 0 && product.quantity < quantityDifference) {
+      return next(new ApiError(`Insufficient product quantity in stock`, 400));
+    }
+
+    // Update the product stock quantity
+    product.quantity -= quantityDifference;
+    await product.save();
+
+    // Update the cart item quantity
     cartItem.quantity = quantity;
     cart.cartItems[itemIndex] = cartItem;
   } else {
@@ -134,11 +206,10 @@ exports.updateCartItemQuantity = asyncHandler(async (req, res, next) => {
   }
 
   calcTotalCartPrice(cart);
-
   await cart.save();
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     numOfCartItems: cart.cartItems.length,
     data: cart,
   });
@@ -173,7 +244,7 @@ exports.applyCoupon = asyncHandler(async (req, res, next) => {
   await cart.save();
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     numOfCartItems: cart.cartItems.length,
     data: cart,
   });
