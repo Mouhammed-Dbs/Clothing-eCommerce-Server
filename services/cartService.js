@@ -21,6 +21,7 @@ const calcTotalCartPrice = (cart) => {
 exports.addProductToCart = asyncHandler(async (req, res, next) => {
   const { productId, color, size } = req.body;
   const product = await Product.findById(productId);
+
   // Check if product is available
   if (product.quantity < 1) {
     return next(new ApiError(`Product is out of stock`, 400));
@@ -30,13 +31,13 @@ exports.addProductToCart = asyncHandler(async (req, res, next) => {
   let cart = await Cart.findOne({ user: req.user._id });
 
   if (!cart) {
-    // create cart for logged user with product
+    // Create cart for logged user with product
     cart = await Cart.create({
       user: req.user._id,
       cartItems: [{ product: productId, color, size, price: product.price }],
     });
   } else {
-    // product exists in cart, update product quantity
+    // Product exists in cart, update product quantity
     const productIndex = cart.cartItems.findIndex(
       (item) =>
         item.product._id.toString() === productId &&
@@ -49,7 +50,7 @@ exports.addProductToCart = asyncHandler(async (req, res, next) => {
       cartItem.quantity += 1;
       cart.cartItems[productIndex] = cartItem;
     } else {
-      // product not exist in cart, push product to cartItems array
+      // Product not exist in cart, push product to cartItems array
       cart.cartItems.push({
         product: productId,
         color,
@@ -59,9 +60,6 @@ exports.addProductToCart = asyncHandler(async (req, res, next) => {
     }
   }
 
-  // Decrement the product quantity
-  product.quantity -= 1;
-  await product.save();
   // Calculate total cart price
   calcTotalCartPrice(cart);
   await cart.save();
@@ -110,13 +108,6 @@ exports.removeSpecificCartItem = asyncHandler(async (req, res, next) => {
   );
 
   if (itemIndex > -1) {
-    const cartItem = cart.cartItems[itemIndex];
-    const product = await Product.findById(cartItem.product._id.toString());
-
-    // Return the quantity back to stock
-    product.quantity += cartItem.quantity;
-    await product.save();
-
     // Remove item from cart
     cart.cartItems.splice(itemIndex, 1);
 
@@ -135,7 +126,7 @@ exports.removeSpecificCartItem = asyncHandler(async (req, res, next) => {
   }
 });
 
-// @desc    clear logged user cart
+// @desc    Clear logged user cart
 // @route   DELETE /api/v1/cart
 // @access  Private/User
 exports.clearCart = asyncHandler(async (req, res, next) => {
@@ -144,17 +135,6 @@ exports.clearCart = asyncHandler(async (req, res, next) => {
   if (!cart) {
     return next(new ApiError(`There is no cart for user ${req.user._id}`, 404));
   }
-
-  // Return all quantities to stock using Promise.all for parallel execution
-  await Promise.all(
-    cart.cartItems.map(async (item) => {
-      const product = await Product.findById(item.product._id.toString());
-      if (product) {
-        product.quantity += item.quantity;
-        await product.save();
-      }
-    })
-  );
 
   // Delete the user's cart
   await Cart.findOneAndDelete({ user: req.user._id });
@@ -170,7 +150,7 @@ exports.updateCartItemQuantity = asyncHandler(async (req, res, next) => {
 
   const cart = await Cart.findOne({ user: req.user._id });
   if (!cart) {
-    return next(new ApiError(`there is no cart for user ${req.user._id}`, 404));
+    return next(new ApiError(`There is no cart for user ${req.user._id}`, 404));
   }
 
   const itemIndex = cart.cartItems.findIndex(
@@ -179,29 +159,11 @@ exports.updateCartItemQuantity = asyncHandler(async (req, res, next) => {
 
   if (itemIndex > -1) {
     const cartItem = cart.cartItems[itemIndex];
-    const productId = cartItem.product._id.toString();
-    const product = await Product.findById(productId);
-
-    if (!product) {
-      return next(new ApiError(`Product not found`, 404));
-    }
-
-    const quantityDifference = quantity - cartItem.quantity;
-
-    if (quantityDifference > 0 && product.quantity < quantityDifference) {
-      return next(new ApiError(`Insufficient product quantity in stock`, 400));
-    }
-
-    // Update the product stock quantity
-    product.quantity -= quantityDifference;
-    await product.save();
-
-    // Update the cart item quantity
     cartItem.quantity = quantity;
     cart.cartItems[itemIndex] = cartItem;
   } else {
     return next(
-      new ApiError(`there is no item for this id :${req.params.itemId}`, 404)
+      new ApiError(`There is no item for this id :${req.params.itemId}`, 404)
     );
   }
 
