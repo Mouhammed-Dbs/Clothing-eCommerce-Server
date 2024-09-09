@@ -33,8 +33,9 @@ exports.resizeProductImages = asyncHandler(async (req, res, next) => {
     req.body.imageCover = imageCoverFileName;
   }
   //2- Image processing for images
+  req.body.images = [];
   if (req.files.images) {
-    req.body.images = [];
+    // req.body.images = []; don't clear images if not sent
     await Promise.all(
       req.files.images.map(async (img, index) => {
         const imageName = `product-${uuidv4()}-${Date.now()}-${index + 1}.jpeg`;
