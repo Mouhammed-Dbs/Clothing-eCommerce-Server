@@ -36,8 +36,11 @@ const productSchema = new mongoose.Schema(
     priceAfterDiscount: {
       type: Number,
     },
+    discount: {
+      type: Number,
+      default: 0,
+    },
     colors: [String],
-
     imageCover: {
       type: String,
       required: [true, "Product Image cover is required"],
@@ -46,7 +49,7 @@ const productSchema = new mongoose.Schema(
     category: {
       type: mongoose.Schema.ObjectId,
       ref: "Category",
-      required: [true, "Product must be belong to category"],
+      required: [true, "Product must belong to a category"],
     },
     subcategories: [
       {
@@ -69,7 +72,7 @@ const productSchema = new mongoose.Schema(
     },
     sizes: {
       type: [String],
-      default: ["small", "medium", "large"], // Default values for the array
+      default: ["small", "medium", "large"],
     },
   },
   {
@@ -79,13 +82,14 @@ const productSchema = new mongoose.Schema(
   }
 );
 
+// Virtual for reviews
 productSchema.virtual("reviews", {
   ref: "Review",
   foreignField: "product",
   localField: "_id",
 });
 
-// Mongoose query middleware
+// Middleware for populating categories and subcategories
 productSchema.pre(/^find/, function (next) {
   this.populate({
     path: "subcategories",
@@ -98,6 +102,7 @@ productSchema.pre(/^find/, function (next) {
   next();
 });
 
+// Helper function to set image URLs
 const setImageURL = (doc) => {
   if (doc.imageCover && !doc.imageCover.startsWith(process.env.BASE_URL)) {
     const imageUrl = `${process.env.BASE_URL}/products/${doc.imageCover}`;
@@ -113,7 +118,7 @@ const setImageURL = (doc) => {
   }
 };
 
-// Remove base URL
+// Helper function to remove base URL from images
 const removeBaseURLFromImages = (doc) => {
   if (doc.imageCover && doc.imageCover.startsWith(process.env.BASE_URL)) {
     doc.imageCover = doc.imageCover.replace(
@@ -131,6 +136,16 @@ const removeBaseURLFromImages = (doc) => {
   }
 };
 
+// Middleware to calculate discount percentage
+const calculateDiscount = (product) => {
+  if (product.price && product.priceAfterDiscount) {
+    product.discount =
+      ((product.price - product.priceAfterDiscount) / product.price) * 100;
+  } else {
+    product.discount = 0;
+  }
+};
+
 // findOne, findAll and update
 productSchema.post("init", (doc) => {
   setImageURL(doc);
@@ -144,6 +159,19 @@ productSchema.post("save", (doc) => {
 // Pre-save middleware using the separate function
 productSchema.pre("save", function (next) {
   removeBaseURLFromImages(this);
+  calculateDiscount(this); // Calculate discount before saving
+  next();
+});
+
+// Pre-update middleware to calculate discount on update
+productSchema.pre("findOneAndUpdate", function (next) {
+  const update = this.getUpdate();
+  if (update.price && update.priceAfterDiscount) {
+    update.discount =
+      ((update.price - update.priceAfterDiscount) / update.price) * 100;
+  } else {
+    update.discount = 0;
+  }
   next();
 });
 
