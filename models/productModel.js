@@ -137,14 +137,14 @@ const removeBaseURLFromImages = (doc) => {
 };
 
 // Middleware to calculate discount percentage
-const calculateDiscount = (product) => {
-  if (product.price && product.priceAfterDiscount) {
-    product.discount =
-      ((product.price - product.priceAfterDiscount) / product.price) * 100;
-  } else {
-    product.discount = 0;
-  }
-};
+// const calculateDiscount = (product) => {
+//   if (product.price && product.priceAfterDiscount) {
+//     product.discount =
+//       ((product.price - product.priceAfterDiscount) / product.price) * 100;
+//   } else {
+//     product.discount = 0;
+//   }
+// };
 
 // findOne, findAll and update
 productSchema.post("init", (doc) => {
@@ -159,20 +159,20 @@ productSchema.post("save", (doc) => {
 // Pre-save middleware using the separate function
 productSchema.pre("save", function (next) {
   removeBaseURLFromImages(this);
-  calculateDiscount(this); // Calculate discount before saving
+  // calculateDiscount(this);
   next();
 });
 
-// Pre-update middleware to calculate discount on update
-productSchema.pre("findOneAndUpdate", function (next) {
-  const update = this.getUpdate();
-  if (update.price && update.priceAfterDiscount) {
-    update.discount =
-      ((update.price - update.priceAfterDiscount) / update.price) * 100;
-  } else {
-    update.discount = 0;
-  }
-  next();
-});
+// // Pre-update middleware to calculate discount on update
+// productSchema.pre("findOneAndUpdate", function (next) {
+//   const update = this.getUpdate();
+//   if (update.price && update.priceAfterDiscount) {
+//     update.discount =
+//       ((update.price - update.priceAfterDiscount) / update.price) * 100;
+//   } else {
+//     update.discount = 0;
+//   }
+//   next();
+// });
 
 module.exports = mongoose.model("Product", productSchema);
