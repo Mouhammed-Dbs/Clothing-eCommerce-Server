@@ -5,14 +5,25 @@ const Product = require("../models/productModel");
 const Coupon = require("../models/couponModel");
 const Cart = require("../models/cartModel");
 
+// Function to calculate the total price and total price after discount for the cart
 const calcTotalCartPrice = (cart) => {
   let totalPrice = 0;
+  let totalPriceAfterDiscount = 0;
+
   cart.cartItems.forEach((item) => {
-    totalPrice += item.quantity * item.price;
+    const itemPrice = item.price;
+    const discountPrice = item.product.priceAfterDiscount || item.price;
+
+    totalPrice += item.quantity * itemPrice;
+    totalPriceAfterDiscount += item.quantity * discountPrice;
   });
+
   cart.totalCartPrice = totalPrice;
-  cart.totalPriceAfterDiscount = undefined;
-  return totalPrice;
+  cart.totalPriceAfterDiscount =
+    totalPriceAfterDiscount !== totalPrice
+      ? totalPriceAfterDiscount
+      : undefined;
+  return { totalPrice, totalPriceAfterDiscount };
 };
 
 // @desc    Add product to cart
@@ -22,22 +33,18 @@ exports.addProductToCart = asyncHandler(async (req, res, next) => {
   const { productId, color, size } = req.body;
   const product = await Product.findById(productId);
 
-  // Check if product is available
   if (product.quantity < 1) {
     return next(new ApiError(`Product is out of stock`, 400));
   }
 
-  // 1) Get Cart for logged user
   let cart = await Cart.findOne({ user: req.user._id });
 
   if (!cart) {
-    // Create cart for logged user with product
     cart = await Cart.create({
       user: req.user._id,
       cartItems: [{ product: productId, color, size, price: product.price }],
     });
   } else {
-    // Product exists in cart, update product quantity
     const productIndex = cart.cartItems.findIndex(
       (item) =>
         item.product._id.toString() === productId &&
@@ -46,11 +53,8 @@ exports.addProductToCart = asyncHandler(async (req, res, next) => {
     );
 
     if (productIndex > -1) {
-      const cartItem = cart.cartItems[productIndex];
-      cartItem.quantity += 1;
-      cart.cartItems[productIndex] = cartItem;
+      cart.cartItems[productIndex].quantity += 1;
     } else {
-      // Product not exist in cart, push product to cartItems array
       cart.cartItems.push({
         product: productId,
         color,
@@ -60,7 +64,6 @@ exports.addProductToCart = asyncHandler(async (req, res, next) => {
     }
   }
 
-  // Calculate total cart price
   calcTotalCartPrice(cart);
   await cart.save();
 
@@ -108,9 +111,7 @@ exports.removeSpecificCartItem = asyncHandler(async (req, res, next) => {
   );
 
   if (itemIndex > -1) {
-    // Remove item from cart
     cart.cartItems.splice(itemIndex, 1);
-
     calcTotalCartPrice(cart);
     await cart.save();
 
@@ -136,7 +137,6 @@ exports.clearCart = asyncHandler(async (req, res, next) => {
     return next(new ApiError(`There is no cart for user ${req.user._id}`, 404));
   }
 
-  // Delete the user's cart
   await Cart.findOneAndDelete({ user: req.user._id });
 
   res.status(204).send();
@@ -158,9 +158,7 @@ exports.updateCartItemQuantity = asyncHandler(async (req, res, next) => {
   );
 
   if (itemIndex > -1) {
-    const cartItem = cart.cartItems[itemIndex];
-    cartItem.quantity = quantity;
-    cart.cartItems[itemIndex] = cartItem;
+    cart.cartItems[itemIndex].quantity = quantity;
   } else {
     return next(
       new ApiError(`There is no item for this id :${req.params.itemId}`, 404)
@@ -177,7 +175,7 @@ exports.updateCartItemQuantity = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Apply coupon on logged user cart
+/// @desc    Apply coupon on logged user cart
 // @route   PUT /api/v1/cart/applyCoupon
 // @access  Private/User
 exports.applyCoupon = asyncHandler(async (req, res, next) => {
@@ -191,18 +189,25 @@ exports.applyCoupon = asyncHandler(async (req, res, next) => {
     return next(new ApiError(`Coupon is invalid or expired`));
   }
 
-  // 2) Get logged user cart to get total cart price
+  // 2) Get logged user cart to get total cart price after discounts
   const cart = await Cart.findOne({ user: req.user._id });
 
-  const totalPrice = cart.totalCartPrice;
+  if (!cart || cart.cartItems.length === 0) {
+    return next(new ApiError("No items in the cart", 400));
+  }
 
-  // 3) Calculate price after priceAfterDiscount
-  const totalPriceAfterDiscount = (
-    totalPrice -
-    (totalPrice * coupon.discount) / 100
-  ).toFixed(2); // 99.23
+  // Check if totalPriceAfterDiscount exists, otherwise use totalCartPrice
+  const priceToApplyCoupon =
+    cart.totalPriceAfterDiscount || cart.totalCartPrice;
 
-  cart.totalPriceAfterDiscount = totalPriceAfterDiscount;
+  // 3) Calculate price after applying coupon discount
+  const totalPriceAfterCoupon = (
+    priceToApplyCoupon -
+    (priceToApplyCoupon * coupon.discount) / 100
+  ).toFixed(2); // e.g., 99.23
+
+  // Update cart with the new discounted price
+  cart.totalPriceAfterDiscount = totalPriceAfterCoupon;
   await cart.save();
 
   res.status(200).json({
