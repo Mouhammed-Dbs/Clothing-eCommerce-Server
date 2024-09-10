@@ -42,7 +42,15 @@ exports.addProductToCart = asyncHandler(async (req, res, next) => {
   if (!cart) {
     cart = await Cart.create({
       user: req.user._id,
-      cartItems: [{ product: productId, color, size, price: product.price }],
+      cartItems: [
+        {
+          product: productId,
+          color,
+          size,
+          price: product.price,
+          priceAfterDiscount: product.priceAfterDiscount,
+        },
+      ],
     });
   } else {
     const productIndex = cart.cartItems.findIndex(
@@ -60,6 +68,7 @@ exports.addProductToCart = asyncHandler(async (req, res, next) => {
         color,
         size,
         price: product.price,
+        priceAfterDiscount: product.priceAfterDiscount,
       });
     }
   }
