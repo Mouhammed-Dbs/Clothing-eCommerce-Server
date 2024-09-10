@@ -12,7 +12,7 @@ const calcTotalCartPrice = (cart) => {
 
   cart.cartItems.forEach((item) => {
     const itemPrice = item.price;
-    const discountPrice = item.product.priceAfterDiscount || item.price;
+    const discountPrice = item.priceAfterDiscount || item.price;
 
     totalPrice += item.quantity * itemPrice;
     totalPriceAfterDiscount += item.quantity * discountPrice;
