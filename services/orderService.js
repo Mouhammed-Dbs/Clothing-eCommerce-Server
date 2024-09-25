@@ -12,10 +12,6 @@ const Order = require("../models/orderModel");
 // @route   POST /api/v1/orders/cartId
 // @access  Protected/User
 exports.createCashOrder = asyncHandler(async (req, res, next) => {
-  // app settings
-  const taxPrice = 0;
-  const shippingPrice = 0;
-
   // 1) Get cart depend on cartId
   const cart = await Cart.findById(req.params.cartId);
   if (!cart) {
@@ -28,6 +24,10 @@ exports.createCashOrder = asyncHandler(async (req, res, next) => {
   const cartPrice = cart.totalPriceAfterDiscount
     ? cart.totalPriceAfterDiscount
     : cart.totalCartPrice;
+
+  // app settings
+  const taxPrice = (cartPrice * 6) / 100;
+  const shippingPrice = 0;
 
   const totalOrderPrice = cartPrice + taxPrice + shippingPrice;
 
@@ -123,10 +123,6 @@ exports.updateOrderToDelivered = asyncHandler(async (req, res, next) => {
 // @route   GET /api/v1/orders/checkout-session/:cartId
 // @access  Protected/User
 exports.checkoutSession = asyncHandler(async (req, res, next) => {
-  // app settings
-  const taxPrice = 0;
-  const shippingPrice = 0;
-
   // 1) Get cart depend on cartId
   const cart = await Cart.findById(req.params.cartId);
   if (!cart) {
@@ -139,6 +135,9 @@ exports.checkoutSession = asyncHandler(async (req, res, next) => {
   const cartPrice = cart.totalPriceAfterDiscount
     ? cart.totalPriceAfterDiscount
     : cart.totalCartPrice;
+  // app settings
+  const taxPrice = (cartPrice * 6) / 100;
+  const shippingPrice = 0;
 
   const totalOrderPrice = cartPrice + taxPrice + shippingPrice;
 
@@ -174,6 +173,7 @@ exports.checkoutSession = asyncHandler(async (req, res, next) => {
       phone: req.query.phone || "",
       city: req.query.city || "",
       postalCode: req.query.postalCode || "",
+      taxPrice: taxPrice.toString(),
     },
   });
 
@@ -184,6 +184,7 @@ exports.checkoutSession = asyncHandler(async (req, res, next) => {
 const createCardOrder = async (session) => {
   const cartId = session.client_reference_id;
   const shippingAddress = session.metadata;
+  const taxPrice = parseFloat(session.metadata.taxPrice);
   const oderPrice = session.amount_total / 100;
 
   const cart = await Cart.findById(cartId);
@@ -195,6 +196,7 @@ const createCardOrder = async (session) => {
     cartItems: cart.cartItems,
     shippingAddress,
     totalOrderPrice: oderPrice,
+    taxPrice,
     isPaid: true,
     paidAt: Date.now(),
     paymentMethodType: "card",
@@ -235,6 +237,7 @@ exports.webhookCheckout = asyncHandler(async (req, res, next) => {
   if (event.type === "checkout.session.completed") {
     //  Create order
     createCardOrder(event.data.object);
+    console.log(event.data.object);
   }
 
   res.status(200).json({ received: true });
