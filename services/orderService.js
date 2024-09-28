@@ -20,26 +20,42 @@ exports.createCashOrder = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // 2) Get order price depend on cart price "Check if coupon apply"
+  // 2) Ensure that shipping method is provided
+  if (!req.body.shippingMethod) {
+    return next(new ApiError("Shipping method is required", 400));
+  }
+
+  // 3) Get order price depend on cart price "Check if coupon apply"
   const cartPrice = cart.totalPriceAfterDiscount
     ? cart.totalPriceAfterDiscount
     : cart.totalCartPrice;
 
-  // app settings
-  const taxPrice = (cartPrice * 6) / 100;
-  const shippingPrice = 0;
+  // 4) Calculate shipping price based on total cart price
+  let shippingPrice = 0;
+  if (req.body.shippingMethod === "Express") {
+    shippingPrice = 30;
+  } else if (req.body.shippingMethod === "Overnight") {
+    shippingPrice = 15;
+  } else if (req.body.shippingMethod === "Priority") {
+    shippingPrice = cartPrice > 100 ? 0 : 5;
+  }
 
+  // Calculate tax price
+  const taxPrice = (cartPrice * 6) / 100;
+
+  // Calculate total order price
   const totalOrderPrice = cartPrice + taxPrice + shippingPrice;
 
-  // 3) Create order with default paymentMethodType cash
+  // 5) Create order with default paymentMethodType cash
   const order = await Order.create({
     user: req.user._id,
     cartItems: cart.cartItems,
     shippingAddress: req.body.shippingAddress,
+    shippingPrice, // Save shipping price in the order
     totalOrderPrice,
   });
 
-  // 4) After creating order, decrement product quantity, increment product sold
+  // 6) After creating order, decrement product quantity, increment product sold
   if (order) {
     const bulkOption = cart.cartItems.map((item) => ({
       updateOne: {
@@ -49,7 +65,7 @@ exports.createCashOrder = asyncHandler(async (req, res, next) => {
     }));
     await Product.bulkWrite(bulkOption, {});
 
-    // 5) Clear cart depend on cartId
+    // 7) Clear cart depend on cartId
     await Cart.findByIdAndDelete(req.params.cartId);
   }
 
@@ -131,17 +147,33 @@ exports.checkoutSession = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // 2) Get order price depend on cart price "Check if coupon apply"
+  // 2) Ensure that shipping method is provided
+  if (!req.query.shippingMethod) {
+    return next(new ApiError("Shipping method is required", 400));
+  }
+
+  // 3) Get order price depend on cart price "Check if coupon apply"
   const cartPrice = cart.totalPriceAfterDiscount
     ? cart.totalPriceAfterDiscount
     : cart.totalCartPrice;
-  // app settings
-  const taxPrice = (cartPrice * 6) / 100;
-  const shippingPrice = 0;
 
+  // 4) Calculate shipping price based on total cart price
+  let shippingPrice = 0;
+  if (req.query.shippingMethod === "Express") {
+    shippingPrice = 30;
+  } else if (req.query.shippingMethod === "Overnight") {
+    shippingPrice = 15;
+  } else if (req.query.shippingMethod === "Priority") {
+    shippingPrice = cartPrice > 100 ? 0 : 5;
+  }
+
+  // Calculate tax price
+  const taxPrice = (cartPrice * 6) / 100;
+
+  // Calculate total order price
   const totalOrderPrice = cartPrice + taxPrice + shippingPrice;
 
-  // 3) Create stripe checkout session
+  // 5) Create stripe checkout session
   const session = await stripe.checkout.sessions.create({
     line_items: [
       {
@@ -155,14 +187,6 @@ exports.checkoutSession = asyncHandler(async (req, res, next) => {
         quantity: 1,
       },
     ],
-    // line_itemss: [
-    //   {
-    //     name: req.user.name,
-    //     amount: totalOrderPrice * 100,
-    //     currency: "usd",
-    //     quantity: 1,
-    //   },
-    // ],
     mode: "payment",
     success_url: `${req.protocol}://${req.get("host").slice(4)}/orders`,
     cancel_url: `${req.protocol}://${req.get("host").slice(4)}/cart`,
@@ -174,10 +198,11 @@ exports.checkoutSession = asyncHandler(async (req, res, next) => {
       city: req.query.city || "",
       postalCode: req.query.postalCode || "",
       taxPrice: taxPrice.toString(),
+      shippingPrice: shippingPrice.toString(),
     },
   });
 
-  // 4) send session to response
+  // 6) send session to response
   res.status(200).json({ status: "success", session });
 });
 
@@ -185,6 +210,7 @@ const createCardOrder = async (session) => {
   const cartId = session.client_reference_id;
   const shippingAddress = session.metadata;
   const taxPrice = parseFloat(session.metadata.taxPrice);
+  const shippingPrice = parseFloat(session.metadata.shippingPrice);
   const oderPrice = session.amount_total / 100;
 
   const cart = await Cart.findById(cartId);
@@ -197,6 +223,7 @@ const createCardOrder = async (session) => {
     shippingAddress,
     totalOrderPrice: oderPrice,
     taxPrice,
+    shippingPrice,
     isPaid: true,
     paidAt: Date.now(),
     paymentMethodType: "card",
