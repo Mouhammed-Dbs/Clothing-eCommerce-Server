@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start:dev": "nodemon server.js",
+    "start:dev": "cross-env NODE_ENV=development nodemon server.js",
     "start": "NODE_ENV=production node server.js"
   },
   "keywords": [],
@@ -29,9 +29,11 @@
     "sharp": "^0.33.4",
     "slugify": "^1.6.3",
     "stripe": "^8.212.0",
+    "twilio": "^5.3.2",
     "uuid": "^8.3.2"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "eslint": "^8.5.0",
     "eslint-config-airbnb": "^19.0.4",
     "eslint-config-prettier": "^8.3.0",
