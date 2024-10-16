@@ -7,6 +7,8 @@ const User = require("../models/userModel");
 const Product = require("../models/productModel");
 const Cart = require("../models/cartModel");
 const Order = require("../models/orderModel");
+const sendEmail = require("../utils/sendEmail");
+// const sendSMS = require("../utils/sendSMS");
 
 // @desc    create cash order
 // @route   POST /api/v1/orders/cartId
@@ -67,6 +69,40 @@ exports.createCashOrder = asyncHandler(async (req, res, next) => {
 
     // 7) Clear cart depend on cartId
     await Cart.findByIdAndDelete(req.params.cartId);
+
+    // Prepare product names
+    const productNames = cart.cartItems
+      .map((item) => item.product.title)
+      .join(", ");
+
+    // Create the SMS message
+    const smsMessage = `New Order Received\nOrder ID: ${order._id}\nProduct(s): ${productNames}\nTotal Price: $${order.totalOrderPrice}\nOpen dashboard to show details order https://dashboard.saramoda.shop/orders/${order._id}`;
+
+    // 8) Send Notification using SMS and Email
+    try {
+      // Send SMS
+      // await sendSMS({
+      //   phone: process.env.ADMIN_PHONE_NUMBER,
+      //   message: smsMessage,
+      // });
+
+      // Send Email
+      await sendEmail({
+        email: process.env.ADMIN_EMAIL,
+        subject: `New Order Received - Order ID: ${order._id}`,
+        message: smsMessage,
+        htmlMessage: `<h1>New Order Received</h1>
+                  <p>Order ID: ${order._id}</p>
+                  <p>Products: ${productNames}</p>
+                  <p>Total Price: $${order.totalOrderPrice}</p>
+                  <p><a href="https://dashboard.saramoda.shop/orders/${order._id}">View Order Details</a></p>`,
+      });
+    } catch (error) {
+      throw new ApiError(
+        `Failed to send notification for order ${order._id}: ${error.message}`,
+        500
+      );
+    }
   }
 
   res.status(201).json({ status: "success", data: order });
@@ -241,6 +277,41 @@ const createCardOrder = async (session) => {
 
     // 5) Clear cart depend on cartId
     await Cart.findByIdAndDelete(cartId);
+
+    // Prepare product names
+    const productNames = cart.cartItems
+      .map((item) => item.product.title)
+      .join(", ");
+
+    // Create the SMS message
+    const smsMessage = `New Order Received\nOrder ID: ${order._id}\nProduct(s): ${productNames}\nTotal Price: $${order.totalOrderPrice}\nOpen dashboard to show details order https://dashboard.saramoda.shop/orders/${order._id}`;
+
+    // 6) Send Notification using SMS and Email
+    try {
+      // Send SMS
+      // await sendSMS({
+      //   phone: process.env.ADMIN_PHONE_NUMBER,
+      //   message: smsMessage,
+      // });
+
+      // Send Email
+      await sendEmail({
+        email: process.env.ADMIN_EMAIL,
+        subject: `New Order Received - Order ID: ${order._id}`,
+        message: smsMessage,
+        htmlMessage: `<h1>New Order Received</h1>
+                  <p>Order ID: ${order._id}</p>
+                  <p>Products: ${productNames}</p>
+                  <p>Total Price: $${order.totalOrderPrice}</p>
+                  <p><a href="https://dashboard.saramoda.shop/orders/${order._id}">View Order Details</a></p>`,
+      });
+    } catch (error) {
+      console.log(error);
+      throw new ApiError(
+        `Failed to send notification for order ${order._id}: ${error.message}`,
+        500
+      );
+    }
   }
 };
 
