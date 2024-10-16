@@ -44,6 +44,7 @@ const productSchema = new mongoose.Schema(
       required: [true, "Product Image cover is required"],
     },
     images: [String],
+    videoUrl: { type: String },
     category: {
       type: mongoose.Schema.ObjectId,
       ref: "Category",

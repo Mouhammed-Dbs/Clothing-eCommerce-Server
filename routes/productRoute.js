@@ -12,8 +12,9 @@ const {
   createProduct,
   updateProduct,
   deleteProduct,
-  uploadProductImages,
+  uploadProductImagesAndVideo,
   resizeProductImages,
+  createVideoProduct,
 } = require("../services/productService");
 const authService = require("../services/authService");
 const reviewsRoute = require("./reviewRoute");
@@ -31,8 +32,9 @@ router
   .post(
     authService.protect,
     authService.allowedTo("admin", "manager"),
-    uploadProductImages,
+    uploadProductImagesAndVideo,
     resizeProductImages,
+    createVideoProduct,
     createProductValidator,
     createProduct
   );
@@ -42,8 +44,9 @@ router
   .put(
     authService.protect,
     authService.allowedTo("admin", "manager"),
-    uploadProductImages,
+    uploadProductImagesAndVideo,
     resizeProductImages,
+    createVideoProduct,
     updateProductValidator,
     updateProduct
   )

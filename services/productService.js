@@ -1,12 +1,15 @@
 const asyncHandler = require("express-async-handler");
 const { v4: uuidv4 } = require("uuid");
 const sharp = require("sharp");
+const fs = require("fs");
 
-const { uploadMixOfImages } = require("../middlewares/uploadImageMiddleware");
+const {
+  uploadMixOfImagesAndVideo,
+} = require("../middlewares/uploadImageMiddleware");
 const factory = require("./handlersFactory");
 const Product = require("../models/productModel");
 
-exports.uploadProductImages = uploadMixOfImages([
+exports.uploadProductImagesAndVideo = uploadMixOfImagesAndVideo([
   {
     name: "imageCover",
     maxCount: 1,
@@ -15,11 +18,14 @@ exports.uploadProductImages = uploadMixOfImages([
     name: "images",
     maxCount: 5,
   },
+  {
+    name: "video",
+    maxCount: 1,
+  },
 ]);
 
 exports.resizeProductImages = asyncHandler(async (req, res, next) => {
-  // console.log(req.files);
-  //1- Image processing for imageCover
+  // 1- Image processing for imageCover
   if (req.files.imageCover) {
     const imageCoverFileName = `product-${uuidv4()}-${Date.now()}-cover.jpeg`;
 
@@ -32,10 +38,10 @@ exports.resizeProductImages = asyncHandler(async (req, res, next) => {
     // Save image into our db
     req.body.imageCover = imageCoverFileName;
   }
-  //2- Image processing for images
+
+  // 2- Image processing for images
   req.body.images = [];
   if (req.files.images) {
-    // req.body.images = []; don't clear images if not sent
     await Promise.all(
       req.files.images.map(async (img, index) => {
         const imageName = `product-${uuidv4()}-${Date.now()}-${index + 1}.jpeg`;
@@ -50,6 +56,21 @@ exports.resizeProductImages = asyncHandler(async (req, res, next) => {
         req.body.images.push(imageName);
       })
     );
+  }
+
+  next();
+});
+
+exports.createVideoProduct = asyncHandler(async (req, res, next) => {
+  if (req.files.video) {
+    const videoFileName = `product-${uuidv4()}-${Date.now()}.mp4`;
+    const videoPath = `uploads/products/videos/${videoFileName}`;
+
+    // Move video from memory to the file system
+    fs.writeFileSync(videoPath, req.files.video[0].buffer);
+
+    // Save video into our db
+    req.body.videoUrl = videoFileName;
   }
   next();
 });
